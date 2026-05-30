@@ -26,36 +26,63 @@ _ANALYSIS_PROGRESS = ""
 
 # ── 行业全量分析 ──────────────────────────────────────────────
 def _analyse_one_industry(name, stocks):
-    roes, gms, nms = [], [], []
-    top_by_roe, top_by_gm = [], []
+    """全维度行业分析 — ROE/毛利率/净利率/负债率/EPS/营收增长/总市值"""
+    roes, gms, nms, drs, epss, revs, caps = [], [], [], [], [], [], []
+    detail = []
     for s in stocks:
         sym = s.get("symbol", ""); nm = s.get("name", "")
         try:
             info = get_stock_info(sym)
             if not info: continue
-            roe_str = info.get("净资产收益率", "")
-            if roe_str:
+            row = {"symbol": sym, "name": nm}
+
+            def p(v):
                 try:
-                    roe = float(str(roe_str).replace("%",""))
-                    if abs(roe) < 200: roes.append(roe); top_by_roe.append({"name":nm,"symbol":sym,"roe":roe})
-                except: pass
-            gm_str = info.get("销售毛利率", "")
-            if gm_str:
+                    f = float(str(v).replace("%","").replace(",",""))
+                    return f if abs(f) < 200 else 0
+                except: return 0
+
+            roe = p(info.get("净资产收益率", "0"))
+            if roe: roes.append(roe); row["roe"] = roe
+
+            gm = p(info.get("销售毛利率", "0"))
+            if gm and abs(gm) < 100: gms.append(gm); row["gross_margin"] = gm
+
+            nm = p(info.get("销售净利率", "0"))
+            if nm and abs(nm) < 100: nms.append(nm); row["net_margin"] = nm
+
+            dr = p(info.get("资产负债率", "0"))
+            if dr and abs(dr) < 100: drs.append(dr); row["debt_ratio"] = dr
+
+            eps = p(info.get("基本每股收益", "0"))
+            if eps: epss.append(eps); row["eps"] = eps
+
+            rev_g = info.get("营业总收入同比增长率","")
+            rv = p(rev_g)
+            if rv: revs.append(rv); row["revenue_growth"] = rv
+
+            cap_str = info.get("总市值","")
+            if cap_str:
                 try:
-                    gm = float(str(gm_str).replace("%",""))
-                    if abs(gm) < 100: gms.append(gm); top_by_gm.append({"name":nm,"symbol":sym,"gm":gm})
+                    cv = float(str(cap_str).replace(",",""))
+                    if cv > 0: caps.append(cv); row["market_cap"] = round(cv/1e8, 1)
                 except: pass
-            nm_str = info.get("销售净利率", "")
-            if nm_str:
-                try: nv = float(str(nm_str).replace("%","")); nms.append(nv) if abs(nv) < 100 else None
-                except: pass
+
+            detail.append(row)
         except: continue
+
     result = {"stock_count": len(stocks)}
     if roes: roes.sort(); result["roe_median"] = round(statistics.median(roes), 2); result["roe_mean"] = round(sum(roes)/len(roes), 2)
     if gms: gms.sort(); result["gross_margin_median"] = round(statistics.median(gms), 2)
     if nms: nms.sort(); result["net_margin_median"] = round(statistics.median(nms), 2)
-    result["top_roe"] = sorted(top_by_roe, key=lambda x: x["roe"], reverse=True)[:5]
-    result["top_gm"] = sorted(top_by_gm, key=lambda x: x["gm"], reverse=True)[:5]
+    if drs: drs.sort(); result["debt_ratio_median"] = round(statistics.median(drs), 2)
+    if epss: epss.sort(); result["eps_median"] = round(statistics.median(epss), 2)
+    if revs: revs.sort(); result["revenue_growth_median"] = round(statistics.median(revs), 2)
+    if caps: caps.sort(); result["market_cap_median"] = round(statistics.median(caps)/1e8, 1)
+
+    result["top_roe"] = sorted([d for d in detail if d.get("roe")], key=lambda x: x["roe"], reverse=True)[:5]
+    result["top_gm"] = sorted([d for d in detail if d.get("gross_margin")], key=lambda x: x["gross_margin"], reverse=True)[:5]
+    result["all_stocks"] = sorted(detail, key=lambda x: x.get("roe", 0), reverse=True)[:30]
     result["source"] = "live"
     return result
 
@@ -152,10 +179,17 @@ def api_industry():
         with open(os.path.join(DATA_DIR,"industry_stocks.json"),"r",encoding="utf-8") as f: ind_data=json.load(f)
         result=[]
         for name,stocks in sorted(ind_data.items()):
-            e={"name":name,"stock_count":len(stocks),"roe_median":None,"gross_margin_median":None,"net_margin_median":None,"top_roe":[],"source":"pending"}
+            e={"name":name,"stock_count":len(stocks),
+               "roe_median":None,"gross_margin_median":None,"net_margin_median":None,
+               "debt_ratio_median":None,"eps_median":None,"revenue_growth_median":None,
+               "market_cap_median":None,"top_roe":[],"all_stocks":[],"source":"pending"}
             if name in cached and cached[name].get("roe_median"):
-                c=cached[name]; e["roe_median"]=c.get("roe_median"); e["gross_margin_median"]=c.get("gross_margin_median")
-                e["net_margin_median"]=c.get("net_margin_median"); e["top_roe"]=c.get("top_roe",[]); e["source"]="cache"
+                c=cached[name]
+                for field in ["roe_median","roe_mean","gross_margin_median","net_margin_median",
+                              "debt_ratio_median","eps_median","revenue_growth_median",
+                              "market_cap_median","top_roe","all_stocks"]:
+                    e[field] = c.get(field)
+                e["source"] = "cache"
             result.append(e)
         pending=sum(1 for r in result if r["roe_median"] is None)
         if not _ANALYSIS_IN_PROGRESS and pending>10:
