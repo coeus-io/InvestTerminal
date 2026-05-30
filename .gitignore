@@ -31,3 +31,8 @@ Thumbs.db
 # Secrets
 .env
 *.token
+
+.playwright-mcp/
+
+data/industry_analysis_cache.json
+portfolio.json

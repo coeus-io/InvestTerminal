@@ -85,7 +85,7 @@ def _load_watchlist():
             with open(WATCHLIST_FILE, "r", encoding="utf-8") as f:
                 return json.load(f)
         except: pass
-    return [{"symbol":"600519","name":"贵州茅台"},{"symbol":"000858","name":"五粮液"},{"symbol":"300750","name":"宁德时代"},{"symbol":"000333","name":"美的集团"},{"symbol":"600036","name":"招商银行"},{"symbol":"601318","name":"中国平安"},{"symbol":"600276","name":"恒瑞医药"},{"symbol":"002594","name":"比亚迪"},{"symbol":"600406","name":"国电南瑞"},{"symbol":"000400","name":"许继电气"},{"symbol":"300001","name":"特锐德"},{"symbol":"000682","name":"东方电子"}]
+    return [{"symbol":"600519","name":"贵州茅台"},{"symbol":"000858","name":"五粮液"},{"symbol":"300750","name":"宁德时代"},{"symbol":"000333","name":"美的集团"},{"symbol":"600036","name":"招商银行"},{"symbol":"601318","name":"中国平安"},{"symbol":"600276","name":"恒瑞医药"},{"symbol":"002594","name":"比亚迪"},{"symbol":"600406","name":"国电南瑞"},{"symbol":"000400","name":"许继电气"},{"symbol":"300001","name":"特锐德"},{"symbol":"000682","name":"东方电子"},{"symbol":"300308","name":"中际旭创"},{"symbol":"300502","name":"新易盛"},{"symbol":"300394","name":"天孚通信"},{"symbol":"002281","name":"光迅科技"},{"symbol":"688048","name":"长光华芯"},{"symbol":"300570","name":"太辰光"},{"symbol":"300913","name":"兆龙互连"},{"symbol":"688313","name":"仕佳光子"}]
 def _save_watchlist(wl):
     with open(WATCHLIST_FILE, "w", encoding="utf-8") as f:
         json.dump(wl, f, ensure_ascii=False, indent=2)
@@ -223,18 +223,34 @@ def api_screening():
             with open(INDUSTRY_CACHE_FILE, "r", encoding="utf-8") as f: ac = json.load(f)
         cached = ac.get("industries", {})
 
-        hot_industries = ["白酒","半导体","银行","保险","证券","光伏设备","电池","新能源车",
-                          "化学制药","中药","医疗器械","IT服务","通信设备","军工装备",
-                          "电力","煤炭开采加工","白色家电","汽车整车","游戏","文化传媒"]
-
-        # Phase 1: 从行业缓存收集标的（带 ROE/毛利率数据）
-        result = []; seen = set()
-        for ind_name in hot_industries:
+        # Phase 1: 从全部行业缓存收集标的（按ROE排序）
+        ind_list = []
+        for ind_name, ci in cached.items():
+            if not ci.get("roe_median"): continue
             stocks = ind_data.get(ind_name, [])
             if not stocks: continue
-            roe_top = cached[ind_name]["top_roe"][:3] if (ind_name in cached and cached[ind_name].get("top_roe")) else \
-                       [{"symbol":s["symbol"],"name":s["name"],"roe":0} for s in stocks[:2]]
-            for s in roe_top:
+            ind_list.append((ind_name, ci["roe_median"], ci.get("gross_margin_median"), ci.get("net_margin_median")))
+
+        # 按ROE中位数降序排
+        ind_list.sort(key=lambda x: x[1], reverse=True)
+
+        result = []; seen = set()
+        for ind_name, roe_m, gm_m, nm_m in ind_list:
+            ci = cached.get(ind_name, {})
+            top_stocks = ci.get("top_roe", [])
+            if not top_stocks:
+                stocks = ind_data.get(ind_name, [])
+                top_stocks = [{"symbol":s["symbol"],"name":s["name"],"roe":0} for s in stocks[:2]]
+
+            for s in top_stocks[:3]:
+                if s["symbol"] in seen: continue
+                seen.add(s["symbol"])
+                result.append({
+                    "symbol": s["symbol"], "name": s.get("name",""), "industry": ind_name,
+                    "roe": str(s.get("roe","")) if s.get("roe") else str(roe_m)+"% (行业)",
+                    "gross_margin": str(gm_m) if gm_m else "--",
+                    "industry_roe": roe_m,  # for sorting
+                })
                 if s["symbol"] in seen: continue
                 seen.add(s["symbol"])
                 ci = cached.get(ind_name, {})
@@ -258,8 +274,8 @@ def api_screening():
                     r["change_pct"] = round(float(cm[r["symbol"]]), 2) if r["symbol"] in cm else None
         except: pass
 
-        random.shuffle(result)
-        return jsonify({"recommendations": result[:80], "total": len(result)})
+        result.sort(key=lambda x: x.get("industry_roe", 0), reverse=True)
+        return jsonify({"recommendations": result[:120], "total": len(result)})
     except Exception as e:
         return jsonify({"error": str(e)})
 
