@@ -1,385 +1,194 @@
-系统性行业分析助手。当用户说"分析这个行业""帮我做行研""这个赛道怎么样""这个行业值不值得投""我想了解XX行业""帮我做一个行业报告"时触发。也适用于创业赛道评估、求职行业选择、投资标的筛选等场景。基于《如何快速了解一个行业》（肖璟著）的完整方法论，覆盖产业生命周期判断、商业模式可行性、市场规模测算、护城河分析、竞争格局与盈利性、估值逻辑、PEST外部因素分析和景气度跟踪，输出结构化的分析报告。
+系统性 A 股投资决策助手。提供行业分析、个股深度研究、多因子选股、持仓管理、市场仪表盘五大能力，覆盖 Python 数据工具包和 Web 可视化面板。
 
-同时提供 A 股投资决策的完整 Python 工具包，涵盖个股深度分析、行业扫描对比、多因子选股和持仓组合管理。
+触发词："分析XX行业""帮我做行研""这个赛道怎么样""这个行业值不值得投""帮我分析XX股票""XX怎么样可以买吗""选股""筛选""持仓""打开了仪表盘""看下盘面""市场怎么样""打开仪表盘"等。
 
-启动时先读取 `STATUS.md` 了解当前项目状态（数据覆盖、已知限制、待完成事项）。
+# A 股投资决策终端（InvestTerminal）
 
-# 行业分析师 + A 股投资工具（Industry Analyst + Stock Toolkit）
+## 五大应用场景
 
-基于肖璟《如何快速了解一个行业》的完整行研框架，配合 A 股 Python 数据工具包，帮助用户系统性地分析行业和个股。
+### 场景 1：行业研究 🔬
 
----
+**触发**："分析半导体行业""白酒板块怎么样""光伏有没有机会""帮我做个 AI 行业报告"
 
-## 核心分析框架
+**执行流程**：
+1. 先通过 Playwright 获取行业成分股（调用 `push2delay.eastmoney.com` API）
+2. 逐只拉取基本面（ROE/毛利率/净利率/营收增长/资产负债率）→ THS 源
+3. 技术面分析（MA/MACD/RSI/趋势判断）→ Sina K 线
+4. 生成结构化报告
 
-全书框架以**产业生命周期**为轴心，共八个维度：
-
-```
-第一步：定义行业边界
-第二步：判断产业生命周期阶段（用渗透率）
-第三步：按阶段选择分析重点
-  → 导入期：可行性（商业模式）
-  → 成长期：规模性（市场空间）
-  → 成熟期：防守性（护城河）+ 盈利性（竞争格局）
-  → 衰退期：替代品威胁
-第四步：估值逻辑
-第五步：PEST 外部因素
-第六步：景气度跟踪指标
-```
-
----
-
-## 执行流程
-
-### Step 0：厘清用户意图
-
-在开始分析前，先问用户一个问题（最多一个）：
-
-> "你分析这个行业，主要是为了：投资选股、创业选赛道、择业找方向，还是其他目的？"
-
-不同目的对应不同的分析侧重（见下方"输出侧重"）。如果用户已经说明，直接跳过。
-
----
-
-### Step 1：定义行业边界
-
-首先明确分析对象的颗粒度，避免口径混乱。
-
-**横向维度**：明确分析的是哪个层级的行业（一级/二级/三级）
-
-- 参考国内常用分类体系：《申万行业分类标准》（三级）、《国民经济行业分类》、证监会《上市公司行业分类指引》
-- 海外可参考 GICS（标普/MSCI）
-
-**纵向维度**：梳理产业链上下游
-
-- 列出主要环节：原材料 → 中间品 → 终端产品 → 渠道 → 用户
-- 标注本次重点分析的环节
-
-**输出**：一句话明确"本次分析的行业定义是……（含哪些环节/不含哪些）"
-
----
-
-### Step 2：判断产业生命周期阶段
-
-用**渗透率**作为核心判断标准（而非时间或增速斜率）：
-
-|渗透率|阶段|典型特征|
-|---|---|---|
-|< 15%|导入期|产品未定型，用户少，商业模式未验证，概念炒作多|
-|15%~40%|成长期|需求激增，供不应求，竞争者涌入，价格战开始|
-|40%~70%|成熟期|增速放缓，竞争格局趋于稳定，周期化特征出现|
-|> 70% 或需求见顶|衰退期|替代品出现，价格/毛利被压缩，成本为王|
-
-**注意**：真实产业生命周期并非线性S曲线，有三种非线性可能：
-
-1. 在导入期直接失败消亡（伪需求）
-2. 成熟期开辟第二增长曲线，重回成长期
-3. 成熟期进入"稳定市场周期化"（如银行、白酒）
-
----
-
-### Step 3：按阶段选择分析重点
-
-根据 Step 2 的判断，聚焦核心分析维度。详见下方各维度说明。
-
-#### 3A：可行性分析（导入期必做，其他阶段选做）
-
-**需求端**：
-
-- 需求是真实存在的吗？（区分真需求 vs 伪需求）
-- 用户愿意付费吗？价格敏感度如何？
-
-**供给端（商业模式验证）**：
-
-1. 是否能"卖出去"：获客成本、转化率、用户留存
-2. 是否能"赚到钱"：单位经济模型（Unit Economics）
-   - 毛利是否为正？毛利率是否可提升？
-   - LTV（客户终身价值）> CAC（获客成本）× 3 倍？
-3. 是否能"规模复制"：商业模式是否可复制到更多用户/地区
-
-**判断结论**：商业模式可行 / 有条件可行（需满足XX前提）/ 不可行（原因）
-
----
-
-#### 3B：规模性分析（成长期必做）
-
-**三个口径的市场规模**：
-
-- **TAM（潜在市场）**：理论上所有可能的用户×付费额
-- **SAM（可服务市场）**：当前技术/渠道/政策条件下能触达的用户
-- **SOM（可获得市场）**：公司/行业在3~5年内实际可拿到的份额
-
-**两种测算方法**：
-
-1. **自上而下（Top-down）**：总市场 × 渗透率假设
-2. **自下而上（Bottom-up）**：单用户/单单价 × 用户数量
-
-**未来3~5年市场规模预测**：
-
-- 参考成熟市场同类行业的历史经验（如用美国/欧洲对应行业比照）
-- 参考政策目标和上市公司指引
-- 给出高/中/低三种情景假设
-
----
-
-#### 3C：防守性分析（成熟期必做）
-
-**护城河的两种构建方式**：
-
-1. **资源垄断**：独占生产要素（稀缺资源、牌照、数据、专利等）
-2. **竞争优势**：通过市场行为建立的壁垒
-
-**四类竞争优势护城河**：
-
-|类型|具体表现|典型案例|
-|---|---|---|
-|品牌|溢价能力、用户信任、情感联结|茅台、苹果|
-|渠道|终端覆盖、分销网络、平台流量|娃哈哈、美团|
-|转换成本|用户迁移的经济/学习/社交成本|SaaS软件、微信生态|
-|规模经济|单位成本随规模扩大而下降|制造业、平台经济|
-
-**判断护城河宽度**：
-
-- 宽护城河：多种壁垒叠加，竞争者难以复制
-- 窄护城河：壁垒单一，竞争者可在3~5年内追上
-- 无护城河：同质化竞争，价格是唯一维度
-
----
-
-#### 3D：盈利性分析（成熟期必做）
-
-**产能周期与竞争格局演化**：
-
-1. 供不应求 → 利润高，吸引进入者
-2. 产能激增 → 价格战开始
-3. 产能出清 → 弱者退场
-4. 格局改善 → 寡头享受超额利润
-
-**纵向格局：产业链利润分配**
-
-关键分析工具：**波特五力 × 议价能力**
-
-议价能力来自两个层面：
-
-- **议价意愿**：是否有动机向上下游要价（与客户关系、品牌定位有关）
-- **议价能力**：是否有条件向上下游要价（集中度、替代品稀缺性有关）
-
-**财务指标验证**：
-
-- 毛利率（定价权）
-- 应收/应付账款周转（占用上下游资金的能力）
-- 净资产收益率 ROE（资本效率）
-
----
-
-### Step 4：估值逻辑
-
-不同阶段对应不同估值框架：
-
-|阶段|估值方式|核心逻辑|
-|---|---|---|
-|导入期|VC 估值法|基于愿景/团队/赛道潜力，多轮融资定价|
-|成长期|成长股估值（PEG/PS）|高增速支撑高估值倍数|
-|成熟期（周期化）|周期股估值（PB/低PE买入）|景气度底部买入，景气度顶部卖出|
-|衰退期|低估值陷阱警示|低PE≠值得买，需警惕戴维斯双杀|
-
-**基础公式**：公司市值 = 净利润 × 市盈率（P/E）
-
-估值倍数由两个因素决定：
-
-- **赔率**：潜在收益空间（基本面好坏）
-- **概率**：市场预期实现的可能性（确定性）
-
----
-
-### Step 5：PEST 外部因素分析
-
-|维度|关键问题|常见驱动/阻力|
-|---|---|---|
-|**Political 政治**|行业政策走向？是扶持还是限制？|产业补贴、牌照管制、进出口政策、地缘政治|
-|**Economic 经济**|宏观周期在哪个位置？利率/汇率影响？|GDP增速、经济周期、利率水平、通胀/通缩|
-|**Social 社会文化**|人口结构/消费习惯是否在改变？|老龄化、消费升级/降级、国潮、代际差异|
-|**Technological 技术**|颠覆性技术是否在成熟？是否会替代现有行业？|AI、自动化、新材料、新能源|
-
-重点分析：**哪些外部因素当前正在成为催化剂（加速行业发展）或是压制因素（阻碍行业发展）**
-
----
-
-### Step 6：景气度跟踪指标设计
-
-分析报告完成后，建议设计一套高频跟踪指标，用于持续验证判断。
-
-**景气度指标类型**：
-
-- **量**：销量、出货量、订单量、用户增长
-- **价**：出厂价、原材料价格、终端零售价
-- **利**：毛利率、净利率变化趋势
-- **库存**：渠道库存周转天数
-- **预期**：PMI采购经理指数、行业景气调查
-
-**数据来源建议**：
-
-- 月度：国家统计局、行业协会数据
-- 季度：上市公司财报（关注头部公司）
-- 高频：Wind、同花顺、海关数据、电商销售数据
-
----
-
-## 输出格式
-
-根据用户目的，调整输出侧重：
-
-**投资选股**：重点输出 → 生命周期阶段 + 竞争格局 + 估值逻辑 + 景气度指标
-**创业选赛道**：重点输出 → 可行性 + 市场规模 + 护城河构建路径
-**择业找方向**：重点输出 → 生命周期阶段 + 行业前景 + 龙头公司格局
-**行研报告**：输出完整框架，所有维度覆盖
-
-**报告结构模板**：
-
-```
-一、行业定义与范围
-二、产业生命周期判断（现在处于哪个阶段，依据是什么）
-三、[按阶段]核心分析维度
-四、外部因素（PEST）
-五、估值参考
-六、景气度跟踪指标
-七、综合结论与风险提示
-```
-
----
-
-## 重要原则
-
-1. **动态视角**：行业是动态演化的，分析结论需定期更新
-2. **颗粒度一致**：全程保持行业边界定义一致，避免口径偷换
-3. **模糊的正确 > 精确的错误**：市场规模测算给出合理区间，不要过度追求精确数字
-4. **结论要可证伪**：分析判断要附上"如果XX发生，结论需要修正"的条件
-5. **景气度跟踪**：分析是起点，持续跟踪才能验证判断
-
----
-
-## Python 数据工具调用指引
-
-项目包含 `python_tools/` 目录下的完整工具包。在分析 A 股时，**必须通过 Bash 工具调用 Python 模块获取实际数据**，不要凭空编造数据。
-
-### 场景 → 工具映射
-
-#### 1. 个股深度分析
-
-用户问某个股票（如"分析茅台""宁德时代怎么样"），按以下顺序调用：
-
+**命令**：
 ```bash
+cd "C:/Users/twili/Desktop/Invest"
+# 单行业速览
+python -c "from python_tools.analysis.industry import industry_summary; print(industry_summary('半导体'))"
+
+# 行业深度（含 ROE 排名、集中度 CR5）
+python -c "from python_tools.analysis.industry import industry_overview; import json; print(json.dumps(industry_overview('白酒', sample_limit=10), ensure_ascii=False, indent=2))"
+```
+
+### 场景 2：个股深度研究 📈
+
+**触发**："帮我分析一下贵州茅台""宁德时代怎么样""润泽科技能不能买""看看中际旭创"
+
+**执行流程**：
+1. 基本面评分（`fundamental.analyze()`） — ROE/毛利率/成长性/财务健康 → 0-100 分
+2. 估值分析（`valuation.analyze()`） — PE/PB/PEG + 行业对比
+3. 技术面（`technical.analyze()`） — MA/MACD/RSI/KDJ + 趋势信号
+4. 行业排名（`industry.rank_in_industry()`） — 该股在行业内的 ROE 排名
+5. 综合结论 + 操作建议
+
+**命令**：
+```bash
+cd "C:/Users/twili/Desktop/Invest"
+
 # 快速一览
-cd /c/Users/twili/Desktop/Invest && python -m python_tools.reports.report_builder quick 600519
+python -m python_tools.reports.report_builder quick 600519
 
-# 完整报告
-cd /c/Users/twili/Desktop/Invest && python -m python_tools.reports.report_builder report 600519
+# 完整报告（基本面+估值+技术面）
+python -m python_tools.reports.report_builder report 600519
 
-# 生成价格走势图
-cd /c/Users/twili/Desktop/Invest && python -m python_tools.reports.report_builder chart 600519
-
-# 单独调用各模块
-cd /c/Users/twili/Desktop/Invest && python -m python_tools.analysis.fundamental 600519
-cd /c/Users/twili/Desktop/Invest && python -m python_tools.analysis.valuation 600519
-cd /c/Users/twili/Desktop/Invest && python -m python_tools.analysis.technical 600519
+# 单独模块
+python -m python_tools.analysis.fundamental 600519
+python -m python_tools.analysis.valuation 600519
+python -m python_tools.analysis.technical 600519
 ```
 
-#### 2. 行业扫描与对比
+### 场景 3：多因子选股 🔍
 
-用户问某行业（如"半导体行业分析""白酒板块估值"）：
+**触发**："帮我筛选 ROE>15%, PE<30, 毛利率>30% 的股票""找一下高增长低估值的光伏股""选股"
 
-```bash
-# 行业概览
-cd /c/Users/twili/Desktop/Invest && python -m python_tools.analysis.industry 半导体
-
-# 行业成分股列表（在 Python 中调用）
-python -c "
-from python_tools.analysis.industry import industry_overview, industry_summary
-print(industry_summary('半导体'))
-"
-```
-
-#### 3. 多因子选股
-
-用户提筛选条件（如"ROE > 15%, PE < 30 的消费股"）：
-
-```bash
-cd /c/Users/twili/Desktop/Invest && python -m python_tools.analysis.screening
-```
-
-或在 Python 中按需组合条件：
-
-```python
-from python_tools.analysis.screening import ScreeningCriteria, screen, format_results
-
-criteria = ScreeningCriteria()
-criteria.roe_above(15).pe_between(0, 30).market_cap_above(100)
-results = screen(criteria, limit=30)
-print(format_results(results))
-```
-
-支持的筛选条件：
+**支持的筛选条件**：
 - `pe_between(low, high)` — PE 区间
 - `pb_between(low, high)` — PB 区间
-- `roe_above(threshold)` — ROE 最低
+- `roe_above(threshold)` — ROE 最低值
 - `roe_between(low, high)` — ROE 区间
-- `market_cap_above(cap_yi)` — 市值下限（亿元）
-- `market_cap_between(low_yi, high_yi)` — 市值区间
-- `gross_margin_above(threshold)` — 毛利率最低
-- `revenue_growth_above(threshold)` — 营收增长最低
+- `market_cap_above(yi)` — 市值下限（亿元）
+- `market_cap_between(low, high)` — 市值区间
+- `gross_margin_above(threshold)` — 毛利率最低值
+- `revenue_growth_above(threshold)` — 营收增长最低值
 - `industry(name)` — 限定行业
 
-#### 4. 组合管理
-
-用户管理持仓（"添加持仓""看看收益""跟沪深300对比"）：
-
+**命令**：
 ```bash
-# 持仓概览
-cd /c/Users/twili/Desktop/Invest && python -m python_tools.portfolio.tracker summary
+cd "C:/Users/twili/Desktop/Invest"
 
-# 持仓快照（DataFrame）
-cd /c/Users/twili/Desktop/Invest && python -m python_tools.portfolio.tracker snapshot
+# 组合条件筛选
+python -c "
+from python_tools.analysis.screening import ScreeningCriteria, screen, format_results
+c = ScreeningCriteria()
+c.roe_above(15).pe_between(0, 30).market_cap_above(100)
+results = screen(c, limit=30)
+print(format_results(results))
+"
+
+# 行业内筛选
+python -c "
+from python_tools.analysis.screening import ScreeningCriteria, screen, format_results
+c = ScreeningCriteria()
+c.industry('半导体').roe_above(5).gross_margin_above(30)
+results = screen(c, limit=20)
+print(format_results(results))
+"
+```
+
+### 场景 4：持仓组合管理 💼
+
+**触发**："帮我看看持仓""添加茅台到持仓""持仓收益怎么样"
+
+**命令**：
+```bash
+cd "C:/Users/twili/Desktop/Invest"
+
+# 持仓概览
+python -m python_tools.portfolio.tracker summary
 
 # 添加持仓
-cd /c/Users/twili/Desktop/Invest && python -m python_tools.portfolio.tracker add 600519 贵州茅台 1800 100
+python -m python_tools.portfolio.tracker add 600519 贵州茅台 1800 100 2025-06-01
 
 # 删除持仓
-cd /c/Users/twili/Desktop/Invest && python -m python_tools.portfolio.tracker remove 600519
+python -m python_tools.portfolio.tracker remove 600519
 
-# 收益归因 + 基准对比
-cd /c/Users/twili/Desktop/Invest && python -m python_tools.portfolio.performance summary
+# 收益归因 + 基准对比（沪深300）
+python -m python_tools.portfolio.performance summary
 ```
 
-#### 5. 数据获取
+### 场景 5：市场仪表盘 🖥️
 
-直接获取原始数据：
+**触发**："打开仪表盘""看下盘面""市场怎么样"
 
+**启动**：
 ```bash
-# 获取日线行情（前复权）
-cd /c/Users/twili/Desktop/Invest && python -c "
-from python_tools.data.akshare_data import get_daily_price
-df = get_daily_price('600519', start_date='20240101')
-print(df.head())
-"
-
-# 北向资金
-cd /c/Users/twili/Desktop/Invest && python -c "
-from python_tools.data.akshare_data import get_north_flow
-print(get_north_flow().tail())
-"
+cd "C:/Users/twili/Desktop/Invest"
+python -m python_tools.dashboard.server
+# 浏览器自动打开 → http://localhost:5000
 ```
 
-### 首次使用
+**四视图**：
 
-在使用工具前，确保已安装依赖：
+| 视图 | 内容 | 刷新 |
+|------|------|:--:|
+| 总览 | KPI（数据源/覆盖/股票池）、市场指数（上证/深成/科创/创业）、持仓组合 | 30s |
+| 行业全景 | 93 行业表（ROE中位/毛利率中位/净利率中位/Top1 股票）| 手动+后台分析 |
+| 推荐股 | 全行业按 ROE 排序的 120 只精选标的（含实时行情） | 手动 |
+| 自选股 | 无数量限制的关注列表（搜索添加/批量删除）| 手动 |
 
-```bash
-cd /c/Users/twili/Desktop/Invest && pip install -r requirements.txt
+**API 端点**：`/api/status` `/api/industry` `/api/industry/analyse` `/api/screening` `/api/watchlist` `/api/watchlist/search` `/api/market`
+
+---
+
+## 数据源可靠性矩阵
+
+| 数据 | 源 | 函数 | 可通性 |
+|------|-----|------|:--:|
+| 🟢 K 线（4年） | Sina | `get_daily_price()` | ✅ 始终 |
+| 🟢 财务数据（102期） | 同花顺 THS | `get_stock_info()` | ✅ 始终 |
+| 🟢 指数 K 线 | Sina | `get_index_data()` | ✅ 始终 |
+| 🟢 实时行情（批量） | adata | `list_market_current()` | ✅ 始终 |
+| 🟡 行业列表 | THS | `get_industry_classification()` | VPN OFF |
+| 🟡 北向资金 | push2.eastmoney | `get_north_flow()` | VPN OFF |
+| 🔴 成分股（实时） | push2delay.eastmoney | `get_industry_stocks()` | **Playwright** |
+| 🟢 成分股（兜底） | 本地 JSON | 自动回退 | ✅ 始终 |
+
+---
+
+## 关键注意点
+
+### 网络限制
+- `17.push2.eastmoney.com` 和 `push2his.eastmoney.com` 在公司网络层被阻断（与 VPN 无关）
+- **成分股实时获取必须通过 Playwright 浏览器**（`push2delay.eastmoney.com`）
+- `adata.stock.market.list_market_current()` 是批量实时行情最优方案
+
+### 数据新鲜度
+- 行业分析缓存 → `data/industry_analysis_cache.json`（后台线程自动跑，5s 保存一次进度）
+- 成分股映射 → `data/industry_stocks.json`（93行业/2778只，Playwright 拉取）
+- 自选股 → `data/watchlist.json`（持久化，支持 50+ 只）
+
+### 行业分析机制
+- 启动后自动后台分析 93 行业（逐个调 THS API）
+- 进度实时可见（`/api/industry` 返回 `progress: "15/93 白酒"`）
+- 推荐股按全行业 ROE 中位数排序，取各行业 Top 3
+
+---
+
+## 使用流程示例
+
+### 用户："帮我分析一下光模块，看看哪些可以买"
+
+```
+1. Python 获取光模块行业 16 只标的的 ROE/毛利率/营收增长 → 基本面对比表
+2. Sina K 线 → 20 日涨幅/RSI/趋势 → 行情对比表
+3. 综合评分 → 第一梯队/第二梯队/第三梯队分级
+4. 买入建议 → 入场区间/目标价/止损
+5. 问用户："要不要加到自选股？" → 调用 `/api/watchlist POST`
 ```
 
-### 注意事项
+### 用户："打开仪表盘"
 
-1. **数据真实**：所有数据来自 AkShare，首次获取需等待网络请求。模块内置 SQLite 缓存避免重复拉取
-2. **股票代码**：使用 6 位数字代码，如 `600519`（茅台）、`000858`（五粮液）
-3. **错误处理**：网络失败时模块返回空结果并非崩溃，检查输出中的 error 字段
-4. **限速**：多因子选股全市场扫描较慢（~30只/分钟），建议限定行业后再筛选
+```
+cd "C:/Users/twili/Desktop/Invest"
+python -m python_tools.dashboard.server
+→ 浏览器自动打开 http://localhost:5000
+→ 四视图可切换
+→ 行业后台自动分析（2-3 分钟完成 93 行业）
+→ 推荐股按 ROE 排序展示 120 只精选
+```
