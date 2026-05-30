@@ -115,7 +115,31 @@ def api_status():
         for u in ["https://money.finance.sina.com.cn","https://push2.eastmoney.com","https://data.eastmoney.com"]:
             try: r=requests.get(u,timeout=3,proxies={"http":None,"https":None}); src_ok+=1 if r.status_code<500 else 0
             except: pass
-        return jsonify({"health":{"sources_ok":src_ok,"sources_total":3,"all_green":src_ok==3,"cache_entries":cs.get("total_entries",0),"reports_count":len(reports),"analysis_progress":ac.get("progress","")},"coverage":{"industries_filled":filled,"industries_total":total,"total_stocks":ts,"fill_pct":round(filled/total*100,0) if total else 0,"analysed_count":analysed},"freshness":{"analysis_cached_at":ac.get("cached_at")}})
+        # 持仓盈亏
+        portfolio = {"total_cost":0,"total_market":0,"total_pnl":0,"total_pnl_pct":0,"holding_count":0}
+        try:
+            from python_tools.portfolio.tracker import load as load_holdings
+            holdings = load_holdings()
+            if holdings:
+                import adata
+                codes = [h["symbol"] for h in holdings]
+                df = adata.stock.market.list_market_current(code_list=codes)
+                if not df.empty:
+                    pm = dict(zip(df["stock_code"], df["price"]))
+                    for h in holdings:
+                        cost = h.get("cost_price",0) * h.get("shares",0)
+                        px = float(pm.get(h["symbol"],0))
+                        mv = px * h.get("shares",0) if px else 0
+                        portfolio["total_cost"] += cost
+                        portfolio["total_market"] += mv
+                        portfolio["holding_count"] += 1
+                    if portfolio["total_cost"] > 0:
+                        portfolio["total_pnl"] = portfolio["total_market"] - portfolio["total_cost"]
+                        portfolio["total_pnl_pct"] = round(portfolio["total_pnl"] / portfolio["total_cost"] * 100, 2)
+        except Exception as e:
+            print(f"[portfolio] calc failed: {e}", file=__import__('sys').stderr)
+
+        return jsonify({"health":{"sources_ok":src_ok,"sources_total":3,"all_green":src_ok==3,"cache_entries":cs.get("total_entries",0),"reports_count":len(reports),"analysis_progress":ac.get("progress","")},"coverage":{"industries_filled":filled,"industries_total":total,"total_stocks":ts,"fill_pct":round(filled/total*100,0) if total else 0,"analysed_count":analysed},"freshness":{"analysis_cached_at":ac.get("cached_at")},"portfolio":{"total_cost":round(portfolio["total_cost"],2),"total_market":round(portfolio["total_market"],2),"total_pnl":round(portfolio["total_pnl"],2),"total_pnl_pct":portfolio["total_pnl_pct"],"holding_count":portfolio["holding_count"]}})
     except Exception as e: return jsonify({"error":str(e)})
 
 @app.route("/api/industry")
