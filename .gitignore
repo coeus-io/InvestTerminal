@@ -1,0 +1,33 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+
+# Virtual environment
+venv/
+.venv/
+
+# IDE
+.vscode/
+.idea/
+
+# Data (large files)
+data/cache.db
+data/industry_stocks_meta.json
+
+# Reports output
+reports_output/
+*.png
+
+# Dashboard static (generated)
+python_tools/dashboard/static/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Secrets
+.env
+*.token
